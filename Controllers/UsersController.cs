@@ -1,8 +1,14 @@
-﻿using System;
+﻿using AutoMapper;
+using My_To_Do_List.Assist_Folder;
+using My_To_Do_List.Models;
+using My_To_Do_List.Services;
+using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
+
+
 namespace My_To_Do_List.Controllers
 {   
     [Route("api/users")]
@@ -18,30 +24,78 @@ namespace My_To_Do_List.Controllers
        [HttpGet()]
        public IActionResult GetUsers()
         {
-            var usersFromRepo = _libraryRepository.GetUsers(); 
+            var usersFromRepo = _libraryRepository.GetUsers();
 
-            if(usersFromRepo == null)
-            {
-                return NotFound(); 
-            }
+            var users = Mapper.Map<IEnumerable<UserDto>>(usersFromRepo);
 
-            return new JsonResult(usersFromRepo); 
+
+            return Ok(users);                                  // new JsonResult(usersFromRepo); 
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id}", Name = "GetUser")] 
         public IActionResult GetUser(Guid id)
         {
+
             var userFromRepo = _libraryRepository.GetUser(id);
-            if(userFromRepo == null)
+
+            var user = Mapper.Map<UserDto>(userFromRepo);
+
+            if (userFromRepo == null)                // if(!_libraryRepository.UserExists(id)) => {return NotFound();}
             {
                 return NotFound();
             }
-            return Ok(User);
+            return Ok(user);
         }
         
         // private ILibraryRepository _libraryRepository 
 
 
+        [HttpPost()]
+        public IActionResult CreateUser([FromBody] UserForCreationDto user)
+        {
+            if(user == null)
+            {
+                return BadRequest();
+            }
+            var userEntity = Mapper.Map<User>(user);
 
+            _libraryRepository.AddUser(userEntity);
+
+            if (!_libraryRepository.Save())
+            {
+                throw new Exception($"The creation operation failed on save");
+            }
+
+            var userToReturn = Mapper.Map<UserDto>(userEntity);
+
+            return CreatedAtRoute("GetUser", new { id = userToReturn.Id }, userToReturn);
+        }
+
+        [HttpPost("{id}")]
+        public IActionResult BlockUserCreation(Guid id)
+        {
+            if (!_libraryRepository.UserExists(id))
+            {
+                return new StatusCodeResult(StatusCodes.Status409Conflict);
+            }
+            return NotFound(); 
+        }
+
+        public IActionResult DeleteUser(Guid id)
+        {
+            var userFromRepo = _libraryRepository.GetUser(id);
+            if (userFromRepo == null)
+            {
+                return NotFound();
+            }
+
+            _libraryRepository.DeleteUser(userFromRepo);
+            if (!_libraryRepository.Save())
+            {
+                throw new Exception($"Deleting a user {id} failed on save"); 
+            }
+            return NoContent(); 
+
+        }
     }
 }

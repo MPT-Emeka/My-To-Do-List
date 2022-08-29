@@ -1,4 +1,5 @@
-﻿namespace My_To_Do_List.Models
+﻿using System;
+namespace My_To_Do_List.Models
 {
     public class UserDto
     {

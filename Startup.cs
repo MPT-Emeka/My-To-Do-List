@@ -4,15 +4,15 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
-using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using My_To_Do_List.Entities;
+using Microsoft.Extensions.Configuration;
 using My_To_Do_List.Services;
+using My_To_Do_List.Entities;
 using Microsoft.EntityFrameworkCore;
-
+using Microsoft.AspNetCore.Diagnostics;
+using AutoMapper;
 
 namespace My_To_Do_List
 {
@@ -29,11 +29,27 @@ namespace My_To_Do_List
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddControllersWithViews();
+
+            services.AddMvc();
+
+            // register the DbContext on the container, getting the connection string from
+            // appSettings (note: use this during development; in a production environment,
+            // it's better to store the connection string in an environment variable)
+
+            var connectionString = Configuration["connectionStrings:libraryDBConnectionString"];
+            services.AddDbContext<LibraryContext>(o => o.UseSqlServer(connectionString));
+
+            services.AddScoped<ILibraryRepository, LibraryRepository>();
+
+            /*services.AddControllersWithViews(setUpAction => { setUpAction.ReturnHttpNotAcceptable = true;
+                setUpAction.OutputFormatters.Add(new XmlDataContractSerializerOutputFormatter());
+                setUpAction.InputFormatters.Add(new XmlDataContractSerializerInputFormatter());
+            } );*/
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ILoggerFactory loggerFactory, LibraryContext libraryContext)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env, 
+            ILoggerFactory loggerFactory, LibraryContext libraryContext)
         {
             if (env.IsDevelopment())
             {
@@ -41,32 +57,65 @@ namespace My_To_Do_List
             }
             else
             {
-                app.UseExceptionHandler("/Home/Error");
+                app.UseExceptionHandler();
+
+                app.UseExceptionHandler(appBuilder =>
+                {
+                    appBuilder.Run(async context =>
+                    {
+                        var exceptionHandlerFeature = context.Features.Get<IExceptionHandlerFeature>();
+                        if (exceptionHandlerFeature != null)
+                        {
+                            var logger = loggerFactory.CreateLogger("Global exception logger");
+                            logger.LogError(500,
+                                exceptionHandlerFeature.Error,
+                                exceptionHandlerFeature.Error.Message);
+                        }
+
+                        context.Response.StatusCode = 500;
+                        await context.Response.WriteAsync("An unexpected error occurred, please try again later");
+
+
+                    });
+                    });
+                }
                 // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-                app.UseHsts();
+                // app.UseHsts();
+
+
+                
+                    AutoMapper.Mapper.Initialize(cfg =>
+                    {
+                        cfg.CreateMap<User, Models.UserDto>()
+
+                        .ForMember(dest => dest.Name, opt => opt.MapFrom(src => $"{src.FirstName} {src.LastName}"));
+                    // .ForMember(dest => dest.Age, opt => opt.MapFrom(src => src.DateOfBirth.GetCurrentAge()));
+
+                    cfg.CreateMap<ToDoList, Models.ToDoListDto>();
+                        cfg.CreateMap<Models.UserForCreationDto, User>();
+                        cfg.CreateMap<Models.ToDoListForUpdateDto, ToDoList>(); // removed the "Entities." to simplify the format. 
+                        cfg.CreateMap<ToDoList, Models.ToDoListForUpdateDto>();
+
+                    });
+                
+
+                libraryContext.EnsureSeedDataForContext();
+
+                app.UseMvc();
+
+                app.UseHttpsRedirection();
+                app.UseStaticFiles();
+
+                app.UseRouting();
+
+                app.UseAuthorization();
+
+                app.UseEndpoints(endpoints =>
+                {
+                    endpoints.MapControllerRoute(
+                        name: "default",
+                        pattern: "{controller=Home}/{action=Index}/{id?}");
+                });
             }
-
-            {
-                AutoMapper.Mapper.Initialize
-            }
-
-            libraryContext.EnsureSeedDataForContext();
-
-            app.UseMvc();
-
-            app.UseHttpsRedirection();
-            app.UseStaticFiles();
-
-            app.UseRouting();
-
-            app.UseAuthorization();
-
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapControllerRoute(
-                    name: "default",
-                    pattern: "{controller=Home}/{action=Index}/{id?}");
-            });
         }
     }
-}

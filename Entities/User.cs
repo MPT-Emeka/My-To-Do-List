@@ -17,6 +17,8 @@ namespace My_To_Do_List.Entities
         [MaxLength(50)]
         public string LastName { get; set; }
 
+        [Required]
+        [MaxLength(50)]
         public string Email { get; set; }
 
         public ICollection<ToDoList> ToDoLists { get; set; }

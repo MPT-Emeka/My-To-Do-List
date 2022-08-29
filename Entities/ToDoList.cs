@@ -9,9 +9,11 @@ namespace My_To_Do_List.Entities
         [key]
         public Guid Id { get; set; }
 
+        [Required]
+        [MaxLength(100)]
         public string Task { get; set; }
 
-        [MaxLength(100)]
+        [MaxLength(300)]
         public string Description { get; set; }
 
         [ForeignKey("UserId")]
